@@ -1,13 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 export async function middleware(request: NextRequest) {
+  // If env vars are missing, skip middleware gracefully instead of crashing
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn("[middleware] Supabase env vars not set — skipping session refresh");
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
-  // Refresh the session so it doesn't expire on the user
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
@@ -26,7 +31,11 @@ export async function middleware(request: NextRequest) {
   });
 
   // Refresh session — do not remove this line
-  await supabase.auth.getUser();
+  try {
+    await supabase.auth.getUser();
+  } catch {
+    // Network error — don't crash the middleware
+  }
 
   return supabaseResponse;
 }
